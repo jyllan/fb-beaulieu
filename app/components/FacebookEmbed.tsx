@@ -1,79 +1,16 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 interface FacebookEmbedProps {
   pageUrl: string
 }
 
-declare global {
-  interface Window {
-    FB?: {
-      init: (params: { xfbml: boolean; version: string }) => void
-      XFBML: {
-        parse: (element?: HTMLElement) => void
-      }
-    }
-    fbAsyncInit?: () => void
-  }
-}
-
 export default function FacebookEmbed({ pageUrl }: FacebookEmbedProps) {
-  const [sdkStatus, setSdkStatus] = useState<'loading' | 'ready' | 'error'>(
-    'loading'
-  )
+  const [iframeStatus, setIframeStatus] = useState<
+    'loading' | 'ready' | 'error'
+  >('loading')
 
-  useEffect(() => {
-    if (!pageUrl) return
-
-    let timeoutId: ReturnType<typeof setTimeout>
-
-    const loadSdk = () => {
-      // If SDK is already loaded, just init and parse
-      if (window.FB) {
-        setSdkStatus('ready')
-        window.FB.XFBML.parse()
-        return
-      }
-
-      // Set up the async init callback
-      window.fbAsyncInit = () => {
-        window.FB!.init({
-          xfbml: true,
-          version: 'v19.0',
-        })
-        clearTimeout(timeoutId)
-        setSdkStatus('ready')
-      }
-
-      // Inject the SDK script if not already present
-      if (!document.getElementById('facebook-jssdk')) {
-        const script = document.createElement('script')
-        script.id = 'facebook-jssdk'
-        script.src = 'https://connect.facebook.net/en_US/sdk.js'
-        script.async = true
-        script.defer = true
-        script.onerror = () => {
-          clearTimeout(timeoutId)
-          setSdkStatus('error')
-        }
-        document.body.appendChild(script)
-      }
-
-      // 10-second timeout for SDK load failure
-      timeoutId = setTimeout(() => {
-        setSdkStatus((current) => (current === 'loading' ? 'error' : current))
-      }, 10000)
-    }
-
-    loadSdk()
-
-    return () => {
-      clearTimeout(timeoutId)
-    }
-  }, [pageUrl])
-
-  // Config error: pageUrl is empty or undefined
   if (!pageUrl) {
     return (
       <div
@@ -98,20 +35,21 @@ export default function FacebookEmbed({ pageUrl }: FacebookEmbedProps) {
     )
   }
 
+  const encodedUrl = encodeURIComponent(pageUrl)
+  const iframeSrc = `https://www.facebook.com/plugins/page.php?href=${encodedUrl}&tabs=timeline&width=500&height=800&small_header=true&adapt_container_width=true&hide_cover=false&show_facepile=false&locale=fr_FR`
+
   return (
     <div>
-      {/* Loading indicator */}
-      {sdkStatus === 'loading' && (
+      {iframeStatus === 'loading' && (
         <div
           role="status"
           style={{ padding: '1rem', textAlign: 'center', color: '#555' }}
         >
-          <p>Loading Facebook feed…</p>
+          <p>Chargement du fil Facebook…</p>
         </div>
       )}
 
-      {/* Error state */}
-      {sdkStatus === 'error' && (
+      {iframeStatus === 'error' && (
         <div
           role="alert"
           style={{
@@ -122,31 +60,39 @@ export default function FacebookEmbed({ pageUrl }: FacebookEmbedProps) {
             borderRadius: '8px',
           }}
         >
-          <p>The Facebook feed is temporarily unavailable.</p>
+          <p>Le fil Facebook est temporairement indisponible.</p>
           <p style={{ marginTop: '0.5rem' }}>
             <a href={pageUrl} target="_blank" rel="noopener noreferrer">
-              Visit the Facebook page directly
+              Visiter la page Facebook directement
             </a>
           </p>
         </div>
       )}
 
-      {/* Facebook Page Plugin markup */}
-      <div
-        className="fb-page"
-        data-href={pageUrl}
-        data-tabs="timeline"
-        data-width="500"
-        data-height="800"
-        data-small-header="true"
-        data-adapt-container-width="true"
-        data-hide-cover="false"
-        data-show-facepile="false"
-      >
-        <blockquote cite={pageUrl} className="fb-xfbml-parse-ignore">
-          <a href={pageUrl}>Facebook Page</a>
-        </blockquote>
-      </div>
+      <iframe
+        src={iframeSrc}
+        width="500"
+        height="800"
+        style={{
+          border: 'none',
+          overflow: 'hidden',
+          width: '100%',
+          maxWidth: '500px',
+          display: iframeStatus === 'ready' ? 'block' : 'none',
+          margin: '0 auto',
+        }}
+        allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+        onLoad={() => setIframeStatus('ready')}
+        onError={() => setIframeStatus('error')}
+        title="Facebook Page Timeline"
+      />
+
+      {/* Fallback link for when iframe is blocked */}
+      <noscript>
+        <a href={pageUrl} target="_blank" rel="noopener noreferrer">
+          Visiter la page Facebook
+        </a>
+      </noscript>
     </div>
   )
 }
